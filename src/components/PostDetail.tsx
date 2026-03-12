@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Box, Text, useInput, useStdout } from 'ink';
 import Spinner from 'ink-spinner';
 import { type Post } from '../services/posts.js';
 import { getComments, type Comment } from '../services/comments.js';
 import { formatDate, stripHtml } from '../utils/format.js';
+import { renderMarkdown } from '../utils/markdown.js';
 import { SITE_URL } from '../config.js';
 
 interface PostDetailProps {
@@ -17,16 +18,21 @@ export function PostDetail({ post, onBack, onOpenInBrowser }: PostDetailProps) {
   const [loadingComments, setLoadingComments] = useState(true);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [showComments, setShowComments] = useState(false);
+  const { stdout } = useStdout();
 
   const attrs = post.attributes;
   const author = attrs.author?.data?.attributes?.username || 'Anonimo';
   const tags = attrs.tags?.data?.map((t) => t.attributes.name) || [];
 
-  const bodyLines = stripHtml(attrs.body || 'Sin contenido')
-    .split('\n')
-    .filter((l) => l.trim() !== '');
+  const termHeight = stdout?.rows ? stdout.rows - 12 : 20;
+  const visibleLines = Math.max(5, termHeight);
 
-  const visibleLines = 20;
+  const renderedBody = useMemo(() => {
+    const body = attrs.body || 'Sin contenido';
+    return renderMarkdown(body);
+  }, [attrs.body]);
+
+  const bodyLines = useMemo(() => renderedBody.split('\n'), [renderedBody]);
 
   useEffect(() => {
     loadComments();
@@ -45,17 +51,26 @@ export function PostDetail({ post, onBack, onOpenInBrowser }: PostDetailProps) {
 
   useInput((input, key) => {
     if (key.downArrow || input === 'j') {
-      setScrollOffset((o) => Math.min(o + 1, Math.max(0, bodyLines.length - visibleLines)));
+      setScrollOffset((o) => Math.min(o + 3, Math.max(0, bodyLines.length - visibleLines)));
     } else if (key.upArrow || input === 'k') {
-      setScrollOffset((o) => Math.max(0, o - 1));
+      setScrollOffset((o) => Math.max(0, o - 3));
+    } else if (input === 'd') {
+      setScrollOffset((o) => Math.min(o + visibleLines, Math.max(0, bodyLines.length - visibleLines)));
+    } else if (input === 'u') {
+      setScrollOffset((o) => Math.max(0, o - visibleLines));
     } else if (input === 'c') {
       setShowComments((s) => !s);
+      setScrollOffset(0);
     } else if (input === 'o') {
       onOpenInBrowser(`${SITE_URL}/post/${post.id}`);
     } else if (input === 'q' || key.escape) {
       onBack();
     }
   });
+
+  const scrollPercent = bodyLines.length <= visibleLines
+    ? 100
+    : Math.round((scrollOffset / (bodyLines.length - visibleLines)) * 100);
 
   return (
     <Box flexDirection="column">
@@ -84,15 +99,15 @@ export function PostDetail({ post, onBack, onOpenInBrowser }: PostDetailProps) {
       {/* Body */}
       {!showComments && (
         <Box flexDirection="column">
-          {bodyLines.slice(scrollOffset, scrollOffset + visibleLines).map((line, i) => (
-            <Text key={i} wrap="wrap">
-              {line}
-            </Text>
-          ))}
+          <Text>
+            {bodyLines.slice(scrollOffset, scrollOffset + visibleLines).join('\n')}
+          </Text>
           {bodyLines.length > visibleLines && (
-            <Text color="gray">
-              --- linea {scrollOffset + 1}-{Math.min(scrollOffset + visibleLines, bodyLines.length)} de {bodyLines.length} ---
-            </Text>
+            <Box marginTop={1}>
+              <Text color="gray">
+                {'─'.repeat(40)} {scrollPercent}% {'─'.repeat(15)}
+              </Text>
+            </Box>
           )}
         </Box>
       )}
@@ -132,7 +147,7 @@ export function PostDetail({ post, onBack, onOpenInBrowser }: PostDetailProps) {
       {/* Controls */}
       <Box marginTop={1}>
         <Text color="gray">
-          [j/k] scroll [c] comentarios [o] abrir en navegador [q] volver
+          [j/k] scroll [d/u] pagina [c] comentarios [o] navegador [q] volver
         </Text>
       </Box>
     </Box>
