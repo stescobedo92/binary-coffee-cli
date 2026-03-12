@@ -1,56 +1,87 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
-import TextInput from 'ink-text-input';
 import Spinner from 'ink-spinner';
-import { login } from '../services/auth.js';
-import { saveAuth } from '../utils/store.js';
+import { githubLoginFlow } from '../services/auth.js';
+import { saveAuth, clearAuth, isLoggedIn, getStoredUser } from '../utils/store.js';
 
 interface LoginFormProps {
   onSuccess: () => void;
   onBack: () => void;
 }
 
-type Field = 'username' | 'password';
-
 export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [activeField, setActiveField] = useState<Field>('username');
+  const loggedIn = isLoggedIn();
+  const user = getStoredUser();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLogout, setShowLogout] = useState(loggedIn);
 
   useInput((_input, key) => {
     if (key.escape) {
       onBack();
+      return;
+    }
+    if (showLogout) {
+      if (_input === 'l' || _input === 'L') {
+        clearAuth();
+        setShowLogout(false);
+      }
+      return;
+    }
+    if (!loading && (_input === 'g' || _input === 'G' || key.return)) {
+      handleGitHubLogin();
     }
   });
 
-  async function handleSubmit() {
-    if (!username || !password) {
-      setError('Username y password son requeridos');
-      return;
-    }
+  async function handleGitHubLogin() {
     setLoading(true);
     setError(null);
     try {
-      const result = await login(username, password);
+      const result = await githubLoginFlow();
       saveAuth(result.jwt, result.user);
       onSuccess();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error de autenticacion';
       setError(message);
-    } finally {
       setLoading(false);
     }
   }
 
+  if (showLogout) {
+    return (
+      <Box flexDirection="column">
+        <Text color="greenBright" bold>
+          Sesion Activa
+        </Text>
+        <Text color="gray">{'─'.repeat(40)}</Text>
+        <Box marginTop={1} flexDirection="column">
+          <Text color="green">Conectado como: <Text bold>@{user?.username}</Text></Text>
+          <Text color="gray">{user?.email}</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color="gray">[L] cerrar sesion  [Esc] volver</Text>
+        </Box>
+      </Box>
+    );
+  }
+
   if (loading) {
     return (
-      <Box>
-        <Text color="green">
-          <Spinner type="dots" />
+      <Box flexDirection="column">
+        <Text color="greenBright" bold>
+          Autenticacion con GitHub
         </Text>
-        <Text> Autenticando...</Text>
+        <Text color="gray">{'─'.repeat(40)}</Text>
+        <Box marginTop={1}>
+          <Text color="green">
+            <Spinner type="dots" />
+          </Text>
+          <Text> Esperando autenticacion en el navegador...</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color="gray">Se abrio tu navegador para iniciar sesion con GitHub.</Text>
+        </Box>
+        <Text color="gray">Completa el proceso alli y vuelve a la terminal.</Text>
       </Box>
     );
   }
@@ -63,42 +94,18 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
       <Text color="gray">{'─'.repeat(40)}</Text>
 
       {error && (
-        <Text color="red">Error: {error}</Text>
+        <Box marginTop={1}>
+          <Text color="red">Error: {error}</Text>
+        </Box>
       )}
 
-      <Box marginTop={1}>
-        <Text color={activeField === 'username' ? 'cyan' : 'gray'}>Usuario: </Text>
-        {activeField === 'username' ? (
-          <TextInput
-            value={username}
-            onChange={setUsername}
-            onSubmit={() => setActiveField('password')}
-            placeholder="tu_usuario"
-          />
-        ) : (
-          <Text>{username}</Text>
-        )}
-      </Box>
-
-      <Box>
-        <Text color={activeField === 'password' ? 'cyan' : 'gray'}>Contrasena: </Text>
-        {activeField === 'password' ? (
-          <TextInput
-            value={password}
-            onChange={setPassword}
-            onSubmit={handleSubmit}
-            mask="*"
-            placeholder="********"
-          />
-        ) : (
-          <Text>{'*'.repeat(password.length) || '________'}</Text>
-        )}
+      <Box marginTop={1} flexDirection="column">
+        <Text>Binary Coffee usa autenticacion con <Text color="cyan" bold>GitHub</Text>.</Text>
+        <Text color="gray">Se abrira tu navegador para autorizar el acceso.</Text>
       </Box>
 
       <Box marginTop={1}>
-        <Text color="gray">
-          [Tab] cambiar campo [Enter] confirmar [Esc] volver
-        </Text>
+        <Text color="gray">[Enter/G] continuar con GitHub  [Esc] volver</Text>
       </Box>
     </Box>
   );

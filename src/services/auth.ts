@@ -3,26 +3,11 @@ import { GRAPHQL_URL } from '../config.js';
 import { setAuthToken } from './graphql.js';
 import { getConfig } from '../utils/store.js';
 
-interface LoginResponse {
-  login: {
-    jwt: string;
-    user: {
-      id: string;
-      username: string;
-      email: string;
-    };
-  };
-}
+const GITHUB_CLIENT_ID = 'c37fad75ee13b3261065';
+const GITHUB_SCOPES = 'read:user read:email';
 
-interface RegisterResponse {
-  register: {
-    jwt: string;
-    user: {
-      id: string;
-      username: string;
-      email: string;
-    };
-  };
+interface LoginWithProviderResponse {
+  loginWithProvider: string;
 }
 
 interface MeResponse {
@@ -36,29 +21,9 @@ interface MeResponse {
   };
 }
 
-const LOGIN_MUTATION = gql`
-  mutation Login($input: UsersPermissionsLoginInput!) {
-    login(input: $input) {
-      jwt
-      user {
-        id
-        username
-        email
-      }
-    }
-  }
-`;
-
-const REGISTER_MUTATION = gql`
-  mutation Register($input: UsersPermissionsRegisterInput!) {
-    register(input: $input) {
-      jwt
-      user {
-        id
-        username
-        email
-      }
-    }
+const LOGIN_WITH_PROVIDER_MUTATION = gql`
+  mutation LoginWithProvider($provider: String!, $code: String!) {
+    loginWithProvider(provider: $provider, code: $code)
   }
 `;
 
@@ -75,22 +40,24 @@ const ME_QUERY = gql`
   }
 `;
 
-export async function login(identifier: string, password: string) {
-  const tempClient = new GraphQLClient(GRAPHQL_URL);
-  const data = await tempClient.request<LoginResponse>(LOGIN_MUTATION, {
-    input: { identifier, password },
+export function getGitHubAuthUrl(redirectUri: string): string {
+  const params = new URLSearchParams({
+    client_id: GITHUB_CLIENT_ID,
+    scope: GITHUB_SCOPES,
+    redirect_uri: redirectUri,
   });
-  setAuthToken(data.login.jwt);
-  return { jwt: data.login.jwt, user: data.login.user };
+  return `https://github.com/login/oauth/authorize?${params.toString()}`;
 }
 
-export async function register(username: string, email: string, password: string) {
+export async function loginWithProvider(provider: string, code: string) {
   const tempClient = new GraphQLClient(GRAPHQL_URL);
-  const data = await tempClient.request<RegisterResponse>(REGISTER_MUTATION, {
-    input: { username, email, password },
+  const data = await tempClient.request<LoginWithProviderResponse>(LOGIN_WITH_PROVIDER_MUTATION, {
+    provider,
+    code,
   });
-  setAuthToken(data.register.jwt);
-  return { jwt: data.register.jwt, user: data.register.user };
+  const jwt = data.loginWithProvider;
+  setAuthToken(jwt);
+  return jwt;
 }
 
 export async function getMe() {
@@ -107,4 +74,60 @@ export function restoreSession() {
     return true;
   }
   return false;
+}
+
+export async function githubLoginFlow(): Promise<{ jwt: string; user: { id: string; username: string; email: string } }> {
+  const http = await import('http');
+  const open = (await import('open')).default;
+
+  return new Promise((resolve, reject) => {
+    const server = http.createServer(async (req, res) => {
+      const url = new URL(req.url || '/', `http://localhost`);
+      const code = url.searchParams.get('code');
+
+      if (!code) {
+        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end('<html><body><h2>Error: no se recibio el codigo de autorizacion</h2></body></html>');
+        return;
+      }
+
+      try {
+        const jwt = await loginWithProvider('github', code);
+        setAuthToken(jwt);
+        const user = await getMe();
+
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`<html><body style="font-family:sans-serif;text-align:center;margin-top:60px">
+          <h2 style="color:#22c55e">Autenticacion exitosa!</h2>
+          <p>Bienvenido, <strong>@${user.username}</strong></p>
+          <p>Puedes cerrar esta ventana y volver a la terminal.</p>
+        </body></html>`);
+
+        server.close();
+        resolve({ jwt, user });
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end('<html><body><h2>Error de autenticacion</h2><p>Intenta de nuevo.</p></body></html>');
+        server.close();
+        reject(err);
+      }
+    });
+
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      if (!addr || typeof addr === 'string') {
+        reject(new Error('No se pudo iniciar el servidor local'));
+        return;
+      }
+      const port = addr.port;
+      const redirectUri = `http://127.0.0.1:${port}`;
+      const authUrl = getGitHubAuthUrl(redirectUri);
+      open(authUrl).catch(() => {});
+    });
+
+    setTimeout(() => {
+      server.close();
+      reject(new Error('Timeout: la autenticacion tomo demasiado tiempo (2 minutos)'));
+    }, 120000);
+  });
 }

@@ -101,29 +101,21 @@ program
 
 program
   .command('login')
-  .description('Iniciar sesion en Binary Coffee')
+  .description('Iniciar sesion con GitHub')
   .action(async () => {
-    const { createInterface } = await import('readline');
-    const { login } = await import('./services/auth.js');
+    const { githubLoginFlow } = await import('./services/auth.js');
     const { saveAuth } = await import('./utils/store.js');
     const chalk = (await import('chalk')).default;
 
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    const ask = (q: string): Promise<string> =>
-      new Promise((resolve) => rl.question(q, resolve));
-
     try {
-      console.log(chalk.green.bold('\n  Binary Coffee - Login\n'));
-      const identifier = await ask(chalk.cyan('  Usuario o email: '));
-      const password = await ask(chalk.cyan('  Contrasena: '));
+      console.log(chalk.green.bold('\n  Binary Coffee - Login con GitHub\n'));
+      console.log(chalk.gray('  Abriendo navegador para autenticacion...\n'));
 
-      const result = await login(identifier, password);
+      const result = await githubLoginFlow();
       saveAuth(result.jwt, result.user);
       console.log(chalk.green(`\n  Bienvenido, @${result.user.username}!`));
     } catch (err: unknown) {
       console.error(chalk.red('\n  Error de autenticacion:'), err instanceof Error ? err.message : err);
-    } finally {
-      rl.close();
     }
   });
 

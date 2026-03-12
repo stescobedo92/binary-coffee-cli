@@ -25,6 +25,7 @@
     "terminal"
   ],
   "author": "stescobedo92",
+  "type": "module",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/stescobedo92/binary-coffee-cli/issues"

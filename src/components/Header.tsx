@@ -3,7 +3,7 @@ import { Box, Text } from 'ink';
 import figlet from 'figlet';
 
 export function Header() {
-  const banner = figlet.textSync('BC', { font: 'ANSI Shadow' });
+  const banner = figlet.textSync('Binary Coffee', { font: 'Small' });
   return (
     <Box flexDirection="column" marginBottom={1}>
       <Text color="green">{banner}</Text>

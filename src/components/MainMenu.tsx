@@ -22,7 +22,7 @@ export function MainMenu({ onSelect }: MainMenuProps) {
     { label: '  Ultimos Posts', value: 'posts' },
     { label: '  Explorar por Tags', value: 'tags' },
     { label: '  Buscar Posts', value: 'search' },
-    { label: loggedIn ? `  Sesion (@${user?.username})` : '  Iniciar Sesion', value: 'login' },
+    { label: loggedIn ? `  Sesion (@${user?.username})` : '  Login con GitHub', value: 'login' },
     { label: '  Salir', value: 'quit' },
   ];
 
