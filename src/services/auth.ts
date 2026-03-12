@@ -1,14 +1,9 @@
-import { GraphQLClient, gql } from 'graphql-request';
-import { GRAPHQL_URL } from '../config.js';
+import { gql } from 'graphql-request';
+import { SITE_URL } from '../config.js';
 import { setAuthToken } from './graphql.js';
 import { getConfig } from '../utils/store.js';
 
-const GITHUB_CLIENT_ID = 'c37fad75ee13b3261065';
-const GITHUB_SCOPES = 'read:user read:email';
-
-interface LoginWithProviderResponse {
-  loginWithProvider: string;
-}
+const DASHBOARD_LOGIN_URL = `${SITE_URL}/dashboard/login`;
 
 interface MeResponse {
   me: {
@@ -20,12 +15,6 @@ interface MeResponse {
     };
   };
 }
-
-const LOGIN_WITH_PROVIDER_MUTATION = gql`
-  mutation LoginWithProvider($provider: String!, $code: String!) {
-    loginWithProvider(provider: $provider, code: $code)
-  }
-`;
 
 const ME_QUERY = gql`
   query Me {
@@ -39,26 +28,6 @@ const ME_QUERY = gql`
     }
   }
 `;
-
-export function getGitHubAuthUrl(redirectUri: string): string {
-  const params = new URLSearchParams({
-    client_id: GITHUB_CLIENT_ID,
-    scope: GITHUB_SCOPES,
-    redirect_uri: redirectUri,
-  });
-  return `https://github.com/login/oauth/authorize?${params.toString()}`;
-}
-
-export async function loginWithProvider(provider: string, code: string) {
-  const tempClient = new GraphQLClient(GRAPHQL_URL);
-  const data = await tempClient.request<LoginWithProviderResponse>(LOGIN_WITH_PROVIDER_MUTATION, {
-    provider,
-    code,
-  });
-  const jwt = data.loginWithProvider;
-  setAuthToken(jwt);
-  return jwt;
-}
 
 export async function getMe() {
   const { getClient } = await import('./graphql.js');
@@ -83,17 +52,16 @@ export async function githubLoginFlow(): Promise<{ jwt: string; user: { id: stri
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
       const url = new URL(req.url || '/', `http://localhost`);
-      const code = url.searchParams.get('code');
+      const token = url.searchParams.get('token');
 
-      if (!code) {
+      if (!token) {
         res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end('<html><body><h2>Error: no se recibio el codigo de autorizacion</h2></body></html>');
+        res.end('<html><body style="font-family:sans-serif;text-align:center;margin-top:60px"><h2>Error: no se recibio el token</h2><p>Intenta de nuevo.</p></body></html>');
         return;
       }
 
       try {
-        const jwt = await loginWithProvider('github', code);
-        setAuthToken(jwt);
+        setAuthToken(token);
         const user = await getMe();
 
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -104,10 +72,10 @@ export async function githubLoginFlow(): Promise<{ jwt: string; user: { id: stri
         </body></html>`);
 
         server.close();
-        resolve({ jwt, user });
+        resolve({ jwt: token, user });
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end('<html><body><h2>Error de autenticacion</h2><p>Intenta de nuevo.</p></body></html>');
+        res.end('<html><body style="font-family:sans-serif;text-align:center;margin-top:60px"><h2>Error de autenticacion</h2><p>Intenta de nuevo.</p></body></html>');
         server.close();
         reject(err);
       }
@@ -120,9 +88,9 @@ export async function githubLoginFlow(): Promise<{ jwt: string; user: { id: stri
         return;
       }
       const port = addr.port;
-      const redirectUri = `http://127.0.0.1:${port}`;
-      const authUrl = getGitHubAuthUrl(redirectUri);
-      open(authUrl).catch(() => {});
+      const callbackUrl = `http://127.0.0.1:${port}`;
+      const loginUrl = `${DASHBOARD_LOGIN_URL}?redir=${encodeURIComponent(callbackUrl)}&tokenOn=true`;
+      open(loginUrl).catch(() => {});
     });
 
     setTimeout(() => {
