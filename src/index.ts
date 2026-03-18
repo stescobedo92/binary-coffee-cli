@@ -17,7 +17,7 @@ program
     const { render } = await import('ink');
     const React = await import('react');
     const { App } = await import('./components/App.js');
-    render(React.createElement(App));
+    render(React.createElement(App), { patchConsole: false });
   });
 
 program

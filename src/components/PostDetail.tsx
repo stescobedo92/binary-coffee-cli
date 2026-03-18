@@ -24,13 +24,16 @@ export function PostDetail({ post, onBack, onOpenInBrowser }: PostDetailProps) {
   const author = attrs.author?.data?.attributes?.username || 'Anonimo';
   const tags = attrs.tags?.data?.map((t) => t.attributes.name) || [];
 
+  const termWidth = stdout?.columns || 80;
   const termHeight = stdout?.rows ? stdout.rows - 12 : 20;
   const visibleLines = Math.max(5, termHeight);
+  const contentWidth = Math.min(termWidth - 4, 100);
+  const separator = '─'.repeat(Math.min(contentWidth, 60));
 
   const renderedBody = useMemo(() => {
     const body = attrs.body || 'Sin contenido';
-    return renderMarkdown(body);
-  }, [attrs.body]);
+    return renderMarkdown(body, contentWidth);
+  }, [attrs.body, contentWidth]);
 
   const bodyLines = useMemo(() => renderedBody.split('\n'), [renderedBody]);
 
@@ -76,7 +79,7 @@ export function PostDetail({ post, onBack, onOpenInBrowser }: PostDetailProps) {
     <Box flexDirection="column">
       {/* Title */}
       <Box marginBottom={1} flexDirection="column">
-        <Text color="greenBright" bold>
+        <Text color="greenBright" bold wrap="wrap">
           {attrs.title}
         </Text>
         <Box>
@@ -93,19 +96,19 @@ export function PostDetail({ post, onBack, onOpenInBrowser }: PostDetailProps) {
             {tags.map((t) => `#${t}`).join(' ')}
           </Text>
         )}
-        <Text color="gray">{'─'.repeat(60)}</Text>
+        <Text color="gray">{separator}</Text>
       </Box>
 
       {/* Body */}
       {!showComments && (
         <Box flexDirection="column">
-          <Text>
-            {bodyLines.slice(scrollOffset, scrollOffset + visibleLines).join('\n')}
-          </Text>
+          {bodyLines.slice(scrollOffset, scrollOffset + visibleLines).map((line, i) => (
+            <Text key={i} wrap="wrap">{line}</Text>
+          ))}
           {bodyLines.length > visibleLines && (
             <Box marginTop={1}>
               <Text color="gray">
-                {'─'.repeat(40)} {scrollPercent}% {'─'.repeat(15)}
+                {separator} {scrollPercent}%
               </Text>
             </Box>
           )}
@@ -118,7 +121,7 @@ export function PostDetail({ post, onBack, onOpenInBrowser }: PostDetailProps) {
           <Text color="cyan" bold>
             Comentarios ({comments.length})
           </Text>
-          <Text color="gray">{'─'.repeat(40)}</Text>
+          <Text color="gray">{separator}</Text>
           {loadingComments ? (
             <Box>
               <Text color="green">
