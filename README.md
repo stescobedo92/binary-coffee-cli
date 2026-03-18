@@ -15,9 +15,27 @@ Terminal UI client for [Binary Coffee](https://binary.coffee) blog. Browse posts
 
 ## Installation
 
+### From npm (recommended)
+
 ```bash
 npm install -g binary-coffee-cli
 ```
+
+### From GitHub
+
+```bash
+npm install -g github:stescobedo92/binary-coffee-cli
+```
+
+### From source
+
+```bash
+git clone https://github.com/stescobedo92/binary-coffee-cli.git
+cd binary-coffee-cli
+npm install -g .
+```
+
+After installation, the `bncf` command will be available globally.
 
 ## Usage
 
